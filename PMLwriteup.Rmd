@@ -1,0 +1,110 @@
+# PML Write Up
+
+#Executive Summary
+This is the Course Project Writeup for the Coursera Practical Machine Learning Course.  Here we will build a random forests model to predict "classe" from accelerometer data.
+
+The model here predicted "classe" for the "Course Project: Submission" with 100% accuracy.  Cross validation was used on 2 levels:
+
+- to validate the random forests model on a testing sample
+
+- and within the training sample 4-fold cross validation is used when fitting the random forests model
+
+The out of sample error was 0.9%, and the in sample error was 0.0%.
+
+## Data Processing
+
+First thing, set the seed to make this all repeatable.
+```{r results='hide', cache=TRUE}
+set.seed(1234)
+```
+
+Fields in the CSV stored as "#DIV/0!" are converted to NA.
+```{r results='hide', cache=TRUE}
+df <- read.csv("pml-training.csv"
+              ,na.strings=c("#DIV/0!")
+              ,stringsAsFactors=FALSE)
+```
+
+The non-accelerometer columns are removed.
+```{r results='hide', cache=TRUE}
+df <- df[,!(names(df) %in% c("X"
+                            ,"user_name"
+                            ,"raw_timestamp_part_1"
+                            ,"raw_timestamp_part_2"
+                            ,"cvtd_timestamp"
+                            ,"new_window"
+                            ,"num_window"))]
+```
+
+We then peel off the target, and then we convert all the remaining columns to numeric.
+```{r results='hide', cache=TRUE}
+classe <- as.data.frame(df$classe)
+
+df <- df[,!(names(df) %in% c("classe"))]
+options(warn=-1) # to hide warnings from coercion to numeric
+df <- as.data.frame(sapply( df, as.numeric ))
+
+df <- cbind(df,classe)
+names(df)[names(df) == 'df$classe'] <- 'classe'
+```
+
+We also exclude all of the fields that are more than 90% missing.
+```{r results='hide', cache=TRUE}
+# drop columns where NA is more than 90%
+df<-df[which(colMeans(is.na(df))<=.90)]
+```
+
+
+## Model Fitting
+
+60% of the data is used to fit the model, and 40% is left for testing.
+```{r results='hide', cache=TRUE}
+library(caret)
+inTrain=createDataPartition(y=df$classe,p=0.6,list=FALSE)
+training<-df[inTrain,]
+testing<-df[-inTrain,]
+```
+
+A random forests model is fit with 4-fold cross validation.
+```{r results='hide', cache=TRUE}
+modFit <- train(classe ~ ., data=training
+               ,method="rf", prox=TRUE
+               ,trControl=trainControl(method="cv"
+                                      ,number=4
+                                      ,allowParallel=TRUE))
+```
+
+
+## Model Evaluation
+
+The out of sample error was 0.9% (99.1% accuracy), and the in sample error was 0.0% (100% accuracy).
+
+```{r, cache=TRUE}
+training.predict <- predict(modFit, newdata=training)
+confusionMatrix(training.predict,training$classe)
+
+testing.predict <- predict(modFit, newdata=testing)
+confusionMatrix(testing.predict,testing$classe)
+```
+
+
+## Application to the Course Project Submission testing set
+
+As the training set was processed, the testing set is likewise processed, and the predictions are listed below.
+```{r, cache=TRUE}
+dftest <- read.csv("pml-testing.csv", na.strings=c("#DIV/0!"),stringsAsFactors=FALSE)
+
+dftest <- dftest[,(names(dftest) %in% names(df))]
+dftest <- as.data.frame(sapply( dftest, as.numeric ))
+
+dftest.predict <- predict(modFit, newdata=dftest)
+dftest.predict
+```
+
+These predictions have 100% accuracy when submitted.
+
+## Appendix
+To aid in repeatability:
+```{r}
+sessionInfo()
+```
